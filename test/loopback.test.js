@@ -27,6 +27,110 @@ describe('loopback', function() {
     it.onServer('has `getCurrentContext` method', function() {
       expect(loopback.getCurrentContext).to.be.a('function');
     });
+
+    it.onServer('exports all expected properties', function() {
+      var EXPECTED = [
+        'ACL',
+        'AccessToken',
+        'Application',
+        'Change',
+        'Checkpoint',
+        'Connector',
+        'DataModel',
+        'DataSource',
+        'Email',
+        'GeoPoint',
+        'Mail',
+        'Memory',
+        'Model',
+        'PersistedModel',
+        'Remote',
+        'Role',
+        'RoleMapping',
+        'Route',
+        'Router',
+        'Scope',
+        'User',
+        'ValidationError',
+        'application',
+        'arguments',
+        'autoAttach',
+        'autoAttachModel',
+        'bodyParser',
+        'caller',
+        'compress',
+        'configureModel',
+        'context',
+        'cookieParser',
+        'cookieSession',
+        'createContext',
+        'createDataSource',
+        'createModel',
+        'csrf',
+        'defaultDataSources',
+        'directory',
+        'errorHandler',
+        'favicon',
+        'faviconFile',
+        'findModel',
+        'getCurrentContext',
+        'getDefaultDataSourceForType',
+        'getModel',
+        'getModelByType',
+        'isBrowser',
+        'isServer',
+        'json',
+        'length',
+        'logger',
+        'memory',
+        'methodOverride',
+        'mime',
+        'modelBuilder',
+        'name',
+        'prototype',
+        'query',
+        'registry',
+        'remoteMethod',
+        'request',
+        'response',
+        'responseTime',
+        'rest',
+        'runInContext',
+        'session',
+        'setDefaultDataSourceForType',
+        'static',
+        'status',
+        'template',
+        'timeout',
+        'token',
+        'urlNotFound',
+        'urlencoded',
+        'version',
+        'vhost'
+      ];
+
+      var actual = Object.getOwnPropertyNames(loopback);
+      actual.sort();
+      expect(actual).to.eql(EXPECTED);
+    });
+  });
+
+  describe('loopback(options)', function() {
+    it('supports localRegistry:true', function() {
+      var app = loopback({ localRegistry: true });
+      expect(app.registry).to.not.equal(loopback.registry);
+    });
+
+    it('does not load builtin models into the local registry', function() {
+      var app = loopback({ localRegistry: true });
+      expect(app.registry.findModel('User')).to.equal(undefined);
+    });
+
+    it('supports loadBuiltinModels:true', function() {
+      var app = loopback({ localRegistry: true, loadBuiltinModels: true });
+      expect(app.registry.findModel('User'))
+        .to.have.property('modelName', 'User');
+    });
   });
 
   describe('loopback.createDataSource(options)', function() {
@@ -163,6 +267,30 @@ describe('loopback', function() {
           .to.throw(Error, new RegExp('Model not found: ' + uniqueModelName));
       });
     });
+
+    it('configures remote methods', function() {
+      var TestModel = loopback.createModel(uniqueModelName, {}, {
+        methods: {
+          staticMethod: {
+            isStatic: true,
+            http: { path: '/static' }
+          },
+          instanceMethod: {
+            isStatic: false,
+            http: { path: '/instance' }
+          }
+        }
+      });
+
+      var methodNames = TestModel.sharedClass.methods().map(function(m) {
+        return m.stringName.replace(/^[^.]+\./, ''); // drop the class name
+      });
+
+      expect(methodNames).to.include.members([
+        'staticMethod',
+        'prototype.instanceMethod'
+      ]);
+    });
   });
 
   describe('loopback.createModel(config)', function() {
@@ -224,7 +352,7 @@ describe('loopback', function() {
       });
 
       loopback.configureModel(model, {
-        dataSource: null,
+        dataSource: false,
         relations: {
           owner: {
             model: 'Application'
@@ -363,6 +491,32 @@ describe('loopback', function() {
       // configureModel MUST NOT change Model's base class
       expect(model.settings.base.name).to.equal(baseName);
     });
+
+    it('configures remote methods', function() {
+      var TestModel = loopback.createModel(uniqueModelName);
+      loopback.configureModel(TestModel, {
+        dataSource: null,
+        methods: {
+          staticMethod: {
+            isStatic: true,
+            http: { path: '/static' }
+          },
+          instanceMethod: {
+            isStatic: false,
+            http: { path: '/instance' }
+          }
+        }
+      });
+
+      var methodNames = TestModel.sharedClass.methods().map(function(m) {
+        return m.stringName.replace(/^[^.]+\./, ''); // drop the class name
+      });
+
+      expect(methodNames).to.include.members([
+        'staticMethod',
+        'prototype.instanceMethod'
+      ]);
+    });
   });
 
   describe('loopback object', function() {
@@ -461,6 +615,20 @@ describe('loopback', function() {
           expect(res.body.data).to.equal('a value stored in context');
           done();
         });
+    });
+
+    it('works outside REST middleware', function(done) {
+      loopback.runInContext(function() {
+        var ctx = loopback.getCurrentContext();
+        expect(ctx).is.an('object');
+        ctx.set('test-key', 'test-value');
+        process.nextTick(function() {
+          var ctx = loopback.getCurrentContext();
+          expect(ctx).is.an('object');
+          expect(ctx.get('test-key')).to.equal('test-value');
+          done();
+        });
+      });
     });
   });
 });

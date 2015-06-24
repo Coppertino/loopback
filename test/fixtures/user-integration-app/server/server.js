@@ -1,13 +1,10 @@
-var loopback = require('../../../');
+var loopback = require('../../../../index');
 var boot = require('loopback-boot');
-var path = require('path');
 var app = module.exports = loopback();
-
+app.enableAuth();
 boot(app, __dirname);
-app.use(loopback.favicon());
-app.use(loopback.cookieParser({secret: app.get('cookieSecret')}));
+app.use(loopback.token({model: app.models.AccessToken}));
 var apiPath = '/api';
 app.use(apiPath, loopback.rest());
-app.use(loopback.static(path.join(__dirname, 'public')));
 app.use(loopback.urlNotFound());
 app.use(loopback.errorHandler());
